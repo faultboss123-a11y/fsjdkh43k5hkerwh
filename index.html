@@ -340,26 +340,36 @@ function escHtml(s) {
 }
 
 // ---- WebSocket connection ----
-function getParams() {
+// Supports three URL modes:
+//   ?ws=wss://abc.ngrok-free.app   (ngrok / custom relay — best for internet)
+//   ?ip=192.168.1.5&port=22006     (direct LAN connection)
+//   (no params)                     → localhost:22006
+
+function buildWsUrl() {
     const params = new URLSearchParams(window.location.search);
-    return {
-        ip: params.get('ip') || 'localhost',
-        port: parseInt(params.get('port')) || 22006,
-    };
+
+    // Mode 1: full websocket URL (ngrok, tunnels, custom relays)
+    const wsParam = params.get('ws');
+    if (wsParam) return wsParam;
+
+    // Mode 2: ip + port
+    const ip   = params.get('ip') || 'localhost';
+    const port = parseInt(params.get('port')) || 22006;
+    return `ws://${ip}:${port}`;
 }
 
+let wsUrl = buildWsUrl();
+
 function connect() {
-    const { ip, port } = getParams();
-    const url = `ws://${ip}:${port}`;
     const statusEl = document.getElementById('status');
     const infoEl = document.getElementById('info');
 
     statusEl.textContent = 'Connecting...';
     statusEl.className = 'status err';
-    infoEl.textContent = `Connecting to ${url}...`;
+    infoEl.textContent = `Connecting to ${wsUrl}...`;
 
     try {
-        ws = new WebSocket(url);
+        ws = new WebSocket(wsUrl);
     } catch (e) {
         statusEl.textContent = 'Connection failed';
         scheduleReconnect();
@@ -369,7 +379,7 @@ function connect() {
     ws.onopen = () => {
         statusEl.textContent = 'Connected';
         statusEl.className = 'status ok';
-        infoEl.textContent = `Connected to ${url}`;
+        infoEl.textContent = `Live — ${wsUrl}`;
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     };
 
@@ -395,10 +405,7 @@ function connect() {
         scheduleReconnect();
     };
 
-    ws.onerror = () => {
-        statusEl.textContent = 'Error';
-        statusEl.className = 'status err';
-    };
+    ws.onerror = () => {};
 }
 
 function scheduleReconnect() {
